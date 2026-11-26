@@ -31,13 +31,17 @@ jobs:
           head -c 120 unity-license/UnityEntitlementLicense.xml; echo
 
       - name: Build the APK inside the Unity image
+        env:
+          UNITY_EMAIL: ${{ secrets.UNITY_EMAIL }}
+          UNITY_PASSWORD: ${{ secrets.UNITY_PASSWORD }}
         run: |
           docker run --rm \
+            -e UNITY_EMAIL -e UNITY_PASSWORD \
             -v "$PWD":/project \
             -v "$PWD/unity-license":/root/.config/unity3d/Unity/licenses \
             -w /project \
             unityci/editor:ubuntu-6000.6.8f1-android-3 \
-            /bin/bash -lc '/opt/unity/Editor/Unity -batchmode -nographics -projectPath /project -buildTarget Android -executeMethod ProjectBootstrap.StereoBuilder.BuildAndroid -logFile /project/build.log; echo "UNITY_EXIT=$?"'
+            /bin/bash -lc '/opt/unity/Editor/Unity -batchmode -nographics -projectPath /project -buildTarget Android -username "$UNITY_EMAIL" -password "$UNITY_PASSWORD" -executeMethod ProjectBootstrap.StereoBuilder.BuildAndroid -logFile /project/build.log; echo "UNITY_EXIT=$?"'
           echo "== build log tail =="
           tail -100 build.log || true
 
