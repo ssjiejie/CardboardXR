@@ -1,0 +1,44 @@
+name: Try Unity personal activation
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  activate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Activate Unity with credentials and collect the license
+        env:
+          UNITY_EMAIL: ${{ secrets.UNITY_EMAIL }}
+          UNITY_PASSWORD: ${{ secrets.UNITY_PASSWORD }}
+        run: |
+          mkdir -p license-out
+          docker run --rm \
+            -e UNITY_EMAIL -e UNITY_PASSWORD \
+            -v "$PWD/license-out:/out" \
+            unityci/editor:ubuntu-6000.6.8f1-base-3 \
+            /bin/bash -lc '
+              export HOME=/root
+              /opt/unity/Editor/Unity -batchmode -nographics -logFile /out/unity.log \
+                -username "$UNITY_EMAIL" -password "$UNITY_PASSWORD" -quit
+              echo "UNITY_EXIT=$?"
+              echo "== candidate license files =="
+              find /root /home /opt -maxdepth 7 \( -name "*.ulf" -o -name "UnityEntitlementLicense*" \) 2>/dev/null | head -20
+              while IFS= read -r f; do cp -v "$f" /out/ 2>/dev/null || true; done < <(find /root /home /opt -maxdepth 7 \( -name "*.ulf" -o -name "UnityEntitlementLicense*" \) 2>/dev/null | head -5)
+            '
+          echo "== collected =="
+          ls -la license-out
+          echo "== log tail =="
+          tail -50 license-out/unity.log || true
+
+      - name: Upload what came out
+        uses: actions/upload-artifact@v4
+        with:
+          name: unity-license-out
+          path: license-out
+          if-no-files-found: warn
