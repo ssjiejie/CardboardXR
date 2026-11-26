@@ -25,7 +25,6 @@
         <activity android:name="com.brenpoly.cardboardxr.VideoImportActivity"
             android:theme="@android:style/Theme.Translucent.NoTitleBar"
             android:exported="false"
-            android:excludeFromRecents="true"
-            android:noHistory="true" />
+            android:excludeFromRecents="true" />
     </application>
 </manifest>
