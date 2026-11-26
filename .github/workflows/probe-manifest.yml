@@ -1,0 +1,22 @@
+name: Probe default manifest
+
+on:
+  workflow_dispatch:
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Print Unity's default Android manifest and activity theme
+        run: |
+          docker run --rm unityci/editor:ubuntu-6000.6.8f1-android-3 /bin/bash -lc '
+            echo "==== default main manifest ===="
+            cat /opt/unity/Editor/Data/PlaybackEngines/AndroidPlayer/AndroidManifest.xml
+            echo
+            echo "==== theme resources mentioning GameActivity ===="
+            grep -rl "UnityPlayerGameActivityTheme" /opt/unity/Editor/Data/PlaybackEngines/AndroidPlayer 2>/dev/null | head -5
+            echo "==== UnityThemeSelector / GameActivityTheme definitions ===="
+            grep -rn "UnityPlayerGameActivityTheme\|UnityThemeSelector" /opt/unity/Editor/Data/PlaybackEngines/AndroidPlayer/Resource 2>/dev/null | head -10
+            echo "==== GameActivity aar/jar ===="
+            find /opt/unity/Editor/Data/PlaybackEngines/AndroidPlayer -iname "*gameactivity*" 2>/dev/null | head -5
+          '
