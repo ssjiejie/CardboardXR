@@ -37,7 +37,6 @@ jobs:
           UNITY_PASSWORD: ${{ secrets.UNITY_PASSWORD }}
         with:
           unityVersion: 6000.6.8f1
-          unityChangeset: 237b6593792b
           targetPlatform: Android
           buildMethod: ProjectBootstrap.StereoBuilder.BuildAndroid
           allowDirtyBuild: true
