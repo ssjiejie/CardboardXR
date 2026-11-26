@@ -1,0 +1,21 @@
+name: Probe licensing client
+
+on:
+  workflow_dispatch:
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Inspect Unity Licensing Client
+        run: |
+          docker run --rm unityci/editor:ubuntu-6000.6.8f1-base-3 /bin/bash -lc '
+            echo "== binaries =="
+            find /opt/unity -iname "*Licensing*" -maxdepth 9 2>/dev/null | head -20
+            CLI=$(find /opt/unity -iname "Unity.Licensing.Client" -type f 2>/dev/null | head -1)
+            echo "CLI=$CLI"
+            if [ -n "$CLI" ]; then
+              echo "== --help =="
+              "$CLI" --help 2>&1 | head -80
+            fi
+          '
