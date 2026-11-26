@@ -1,3 +1,6 @@
+// iOS only: UnityEditor.iOS.Xcode isn't in a Unity installation without iOS build support, such as
+// the Android-only image CI builds in, and an editor script that doesn't compile stops every build.
+#if UNITY_IOS
 using System.IO;
 using UnityEditor;
 using UnityEditor.Build;
@@ -42,3 +45,4 @@ namespace ProjectBootstrap
         }
     }
 }
+#endif
