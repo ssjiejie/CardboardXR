@@ -53,6 +53,10 @@ namespace CardboardXR.UI
             ["front_hand"] = 0xe769,
             ["apps"] = 0xe5c3,
             ["bolt"] = 0xea0b,
+            ["add"] = 0xe145,
+            ["remove"] = 0xe15b,
+            ["photo_library"] = 0xe413,
+            ["auto_fix_high"] = 0xe663,
         };
 
         // The icon's character, for a TMP text set in the icon font; empty for an unknown name.

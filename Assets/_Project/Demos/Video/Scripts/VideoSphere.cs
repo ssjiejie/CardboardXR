@@ -14,6 +14,11 @@ namespace CardboardXR.Demos.Video
     {
         const int k_Rings = 48;
         const int k_Segments = 96;
+        // The video can be scaled from half its radius to a little under the gaze's reach (20 m at radius
+        // 15 m), so zooming in always leaves the surface clickable.
+        const float k_MinScale = 0.5f;
+        const float k_MaxScale = 1.25f;
+        static readonly int k_ChromaKeyId = Shader.PropertyToID("_ChromaKey");
 
         [Tooltip("An unlit material whose main texture the video is drawn into. Copied for each eye.")]
         [SerializeField] Material m_Material;
@@ -26,9 +31,35 @@ namespace CardboardXR.Demos.Video
         Mesh m_Full;
         Mesh m_Half;
         GameObject m_ClickSurface;
+        float m_Scale = 1f;
 
         // A tap or pinch with the gaze on the video, rather than on a panel.
         public event Action Clicked;
+
+        public static float MinScale => k_MinScale;
+        public static float MaxScale => k_MaxScale;
+
+        // The sphere's size relative to its radius. Below 1 the picture comes closer and looks bigger;
+        // above 1 it pulls back and looks smaller. Kept within reach of the gaze, so a tap still lands.
+        public float Scale
+        {
+            get => m_Scale;
+            set
+            {
+                m_Scale = Mathf.Clamp(value, k_MinScale, k_MaxScale);
+                transform.localScale = Vector3.one * m_Scale;
+            }
+        }
+
+        // How much green to cut out, 0 (none) to 1 (most), on every eye's material.
+        public void SetChromaKey(float strength)
+        {
+            foreach (var material in m_Materials)
+            {
+                if (material != null)
+                    material.SetFloat(k_ChromaKeyId, Mathf.Clamp01(strength));
+            }
+        }
 
         void Awake()
         {

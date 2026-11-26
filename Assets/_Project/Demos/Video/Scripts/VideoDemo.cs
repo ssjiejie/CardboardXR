@@ -28,6 +28,11 @@ namespace CardboardXR.Demos.Video
         const float k_SkipSeconds = 10f;
         const int k_EntriesPerPage = 5;
         const float k_StatusSeconds = 5f;
+        // Zoom steps: 1 is the video at its authored size. Above it the picture looks bigger.
+        const float k_ZoomStep = 0.1f;
+        const float k_MinZoom = 0.8f;
+        const float k_MaxZoom = 2f;
+        const float k_DefaultGreenStrength = 0.5f;
 
         [SerializeField] VideoSphere m_Sphere;
         // The repository's placeholders. Any other videos in StreamingAssets (Tools/make_videos.sh copies
@@ -62,6 +67,18 @@ namespace CardboardXR.Demos.Video
         bool m_ShowingLibrary;
         bool m_ControlsShown;
 
+        // Zoom, as a multiple of the video's authored size.
+        float m_Zoom = 1f;
+        TMP_Text m_ZoomLabel;
+        // Green screen: the green is cut out of the video and the room shows behind it, which needs
+        // the camera, so switching it on turns on 6DoF and passthrough too.
+        bool m_GreenScreen;
+        float m_GreenStrength = k_DefaultGreenStrength;
+        M3Button m_GreenButton;
+        M3Slider m_GreenSlider;
+        TMP_Text m_GreenLabel;
+        VideoImporter m_Importer;
+
         public override void OnDemoEnter(CoreServices core)
         {
             m_Core = core;
@@ -77,7 +94,13 @@ namespace CardboardXR.Demos.Video
             m_Player.frameDropped += OnFrameDropped;
             m_Sphere.Clicked += OnVideoClicked;
 
+            // Adds videos from the phone's gallery: the picker copies one into the Videos folder and
+            // calls back, so Refresh finds it. Android only; elsewhere the button says so.
+            m_Importer = gameObject.AddComponent<VideoImporter>();
+            m_Importer.Imported += OnImported;
+
             BuildPanel();
+            ApplyZoom();
             Refresh();
             ShowLibrary();
         }
@@ -86,6 +109,16 @@ namespace CardboardXR.Demos.Video
         {
             if (m_Download != null)
                 StopCoroutine(m_Download);
+            if (m_Importer != null)
+            {
+                m_Importer.Imported -= OnImported;
+                Destroy(m_Importer);
+                m_Importer = null;
+            }
+            // The demo leaves Core as it found it: DemoManager doesn't put back the 6DoF and passthrough
+            // the green screen turned on mid-demo.
+            if (m_GreenScreen)
+                SetGreenScreen(false);
             m_Player.prepareCompleted -= OnPrepared;
             m_Player.errorReceived -= OnError;
             m_Player.frameDropped -= OnFrameDropped;
@@ -229,6 +262,65 @@ namespace CardboardXR.Demos.Video
             Debug.Log($"[Video] Format of {entry.Title} set to {entry.Format}");
         }
 
+        void Zoom(float step)
+        {
+            m_Zoom = Mathf.Clamp(m_Zoom + step, k_MinZoom, k_MaxZoom);
+            ApplyZoom();
+        }
+
+        // The sphere shrinks to make the picture look bigger, and the reverse to make it smaller.
+        void ApplyZoom()
+        {
+            m_Sphere.Scale = 1f / m_Zoom;
+            if (m_ZoomLabel != null)
+                m_ZoomLabel.text = $"{m_Zoom:F1}x";
+            Debug.Log($"[Video] Zoom {m_Zoom:F1}x");
+        }
+
+        void ToggleGreenScreen() => SetGreenScreen(!m_GreenScreen);
+
+        // Cutting the green out shows what's behind the sphere, which is the room as the camera sees it:
+        // that needs 6DoF and passthrough, so they go on with it and back off after.
+        void SetGreenScreen(bool on)
+        {
+            m_GreenScreen = on;
+            if (m_GreenButton != null)
+                m_GreenButton.Selected = on;
+            if (m_GreenLabel != null)
+                m_GreenLabel.gameObject.SetActive(on);
+            if (m_GreenSlider != null)
+                m_GreenSlider.gameObject.SetActive(on);
+            m_Sphere.SetChromaKey(on ? m_GreenStrength : 0f);
+            if (m_Core != null)
+                m_Core.Apply(on ? new CoreState(true, true, false) : new CoreState(false, false, false));
+            Debug.Log(on ? $"[Video] Green screen on at {m_GreenStrength:F2}" : "[Video] Green screen off");
+        }
+
+        void SetGreenStrength(float value)
+        {
+            m_GreenStrength = Mathf.Clamp01(value);
+            if (m_GreenSlider != null)
+                m_GreenSlider.Value = m_GreenStrength;
+            if (m_GreenScreen)
+                m_Sphere.SetChromaKey(m_GreenStrength);
+            Debug.Log($"[Video] Green strength {m_GreenStrength:F2}");
+        }
+
+        void OnAddVideo()
+        {
+            if (m_Importer != null)
+                m_Importer.Pick();
+        }
+
+        // The picker copied a video into the Videos folder (or was closed): show the library again.
+        void OnImported(string path)
+        {
+            if (!string.IsNullOrEmpty(path))
+                Debug.Log($"[Video] {System.IO.Path.GetFileName(path)} added from the gallery");
+            Refresh();
+            ShowLibrary();
+        }
+
         void ReleaseTexture()
         {
             if (m_Texture == null)
@@ -328,7 +420,7 @@ namespace CardboardXR.Demos.Video
 
         // Both pages share one Material panel, k_PanelDistance away, sized to the page showing. Sizes in dp.
         static readonly Vector2 k_LibrarySize = new(600f, 536f);
-        static readonly Vector2 k_ControlsSize = new(600f, 352f);
+        static readonly Vector2 k_ControlsSize = new(600f, 560f);
 
         void BuildPanel()
         {
@@ -364,31 +456,53 @@ namespace CardboardXR.Demos.Video
 
             // The controls: what's playing, a seek slider, transport, then the rest.
             m_ControlsPage = WorldUi.CreateGroup("Controls", m_Panel);
-            m_Title = M3.Text("Title", m_ControlsPage, "", M3Theme.Type.TitleMedium, new Vector2(0f, 140f), new Vector2(552f, 24f));
+            m_Title = M3.Text("Title", m_ControlsPage, "", M3Theme.Type.TitleMedium, new Vector2(0f, 220f), new Vector2(552f, 24f));
             m_Title.textWrappingMode = TextWrappingModes.NoWrap;
-            m_FormatLine = M3.Text("Format", m_ControlsPage, "", M3Theme.Type.BodyMedium, new Vector2(0f, 116f), new Vector2(552f, 20f),
+            m_FormatLine = M3.Text("Format", m_ControlsPage, "", M3Theme.Type.BodyMedium, new Vector2(0f, 196f), new Vector2(552f, 20f),
                 M3Theme.OnSurfaceVariant);
-            m_Seek = M3.Slider("Seek", m_ControlsPage, new Vector2(0f, 76f), 552f);
+            m_Seek = M3.Slider("Seek", m_ControlsPage, new Vector2(0f, 156f), 552f);
             m_Seek.Clicked += fraction =>
             {
                 if (m_Current >= 0 && m_Player.isPrepared)
                     SeekTo(fraction * m_Player.length);
             };
-            m_Time = M3.Text("Time", m_ControlsPage, "", M3Theme.Type.BodyMedium, new Vector2(0f, 46f), new Vector2(552f, 20f),
+            m_Time = M3.Text("Time", m_ControlsPage, "", M3Theme.Type.BodyMedium, new Vector2(0f, 126f), new Vector2(552f, 20f),
                 M3Theme.OnSurfaceVariant);
 
-            M3.IconButton("Back 10 s", m_ControlsPage, "replay_10", M3Button.Variant.Tonal, new Vector2(-100f, -20f),
+            M3.IconButton("Back 10 s", m_ControlsPage, "replay_10", M3Button.Variant.Tonal, new Vector2(-100f, 60f),
                 () => Skip(-k_SkipSeconds));
-            m_Play = M3.IconButton("Play", m_ControlsPage, "play_arrow", M3Button.Variant.Filled, new Vector2(0f, -20f), TogglePlay, 80f);
-            M3.IconButton("Ahead 10 s", m_ControlsPage, "forward_10", M3Button.Variant.Tonal, new Vector2(100f, -20f),
+            m_Play = M3.IconButton("Play", m_ControlsPage, "play_arrow", M3Button.Variant.Filled, new Vector2(0f, 60f), TogglePlay, 80f);
+            M3.IconButton("Ahead 10 s", m_ControlsPage, "forward_10", M3Button.Variant.Tonal, new Vector2(100f, 60f),
                 () => Skip(k_SkipSeconds));
 
             const float width = 168f;
-            M3.Button("Library", m_ControlsPage, "Library", M3Button.Variant.Tonal, new Vector2(-176f, -128f), ShowLibrary, "video_library",
+            M3.Button("Library", m_ControlsPage, "Library", M3Button.Variant.Tonal, new Vector2(-176f, -12f), ShowLibrary, "video_library",
                 width);
-            M3.Button("Next video", m_ControlsPage, "Next", M3Button.Variant.Tonal, new Vector2(0f, -128f), Next, "skip_next", width);
-            M3.Button("Format", m_ControlsPage, "Format", M3Button.Variant.Tonal, new Vector2(176f, -128f), CycleFormat, "aspect_ratio",
+            M3.Button("Next video", m_ControlsPage, "Next", M3Button.Variant.Tonal, new Vector2(0f, -12f), Next, "skip_next", width);
+            M3.Button("Format", m_ControlsPage, "Format", M3Button.Variant.Tonal, new Vector2(176f, -12f), CycleFormat, "aspect_ratio",
                 width);
+
+            // Add a video from the phone's gallery.
+            M3.Button("Add video", m_ControlsPage, "Add", M3Button.Variant.Tonal, new Vector2(-140f, -76f), OnAddVideo,
+                "photo_library", 260f);
+
+            // Green screen: cuts the green out and shows the room behind it (needs the camera).
+            m_GreenButton = M3.Button("Green screen", m_ControlsPage, "Green", M3Button.Variant.Tonal, new Vector2(140f, -76f),
+                ToggleGreenScreen, "auto_fix_high", 260f);
+
+            // Zoom: the video's size on the sphere, as a multiple of how it was authored.
+            M3.IconButton("Smaller", m_ControlsPage, "remove", M3Button.Variant.Tonal, new Vector2(-120f, -140f), () => Zoom(-k_ZoomStep));
+            m_ZoomLabel = M3.Text("Zoom", m_ControlsPage, "1.0x", M3Theme.Type.BodyLarge, new Vector2(0f, -140f), new Vector2(120f, 24f));
+            M3.IconButton("Bigger", m_ControlsPage, "add", M3Button.Variant.Tonal, new Vector2(120f, -140f), () => Zoom(k_ZoomStep));
+
+            // Green screen strength, shown only while it's on.
+            m_GreenLabel = M3.Text("Green label", m_ControlsPage, "Green strength", M3Theme.Type.BodyMedium, new Vector2(0f, -186f),
+                new Vector2(400f, 20f), M3Theme.OnSurfaceVariant);
+            m_GreenSlider = M3.Slider("Green strength", m_ControlsPage, new Vector2(0f, -214f), 420f);
+            m_GreenSlider.Clicked += SetGreenStrength;
+            m_GreenSlider.Value = m_GreenStrength;
+            m_GreenLabel.gameObject.SetActive(false);
+            m_GreenSlider.gameObject.SetActive(false);
         }
 
         void Page(int step)

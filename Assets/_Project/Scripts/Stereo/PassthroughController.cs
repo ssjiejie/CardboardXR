@@ -44,6 +44,9 @@ namespace CardboardXR.Stereo
         [SerializeField] M3Button m_Toggle;
         [Tooltip("How far in front of the camera the image is shown without a focus. It's one flat image, so everything in it appears at this depth.")]
         [SerializeField] float m_Distance = 2f;
+        [Tooltip("Stretches the camera image over the whole eye, cropping what the eye can't see, rather than " +
+                 "showing all of it as a window with a border around it.")]
+        [SerializeField] bool m_FillEyes = true;
         [Tooltip("Height of the passthrough texture in pixels; its width follows the camera image's shape.")]
         [SerializeField] int m_TextureHeight = 720;
 
@@ -379,9 +382,22 @@ namespace CardboardXR.Stereo
             var step = 1f - Mathf.Exp(-Time.unscaledDeltaTime / k_FocusSeconds);
             m_ShownDistance = Mathf.Exp(Mathf.Lerp(Mathf.Log(m_ShownDistance), Mathf.Log(target), step));
             var d = m_ShownDistance;
+            // Filling: the camera sees less than the eye, so the image is stretched to cover the whole
+            // eye and cropped at its edges, instead of sitting in the middle as a window with a border.
+            var size = m_FrustumSize;
+            if (m_FillEyes && m_Rig != null && size.x > 0f && size.y > 0f)
+            {
+                var eye = m_Rig.EyeFrustumSizeAtUnitDistance();
+                if (eye.x > 0f && eye.y > 0f)
+                {
+                    var cover = Mathf.Max(eye.x / size.x, eye.y / size.y);
+                    if (cover > 1f)
+                        size *= cover;
+                }
+            }
             var screen = m_Screen.transform;
             screen.SetLocalPositionAndRotation(new Vector3(m_FrustumCenter.x * d, m_FrustumCenter.y * d, d), Quaternion.identity);
-            screen.localScale = new Vector3(m_FrustumSize.x * d, m_FrustumSize.y * d, 1f);
+            screen.localScale = new Vector3(size.x * d, size.y * d, 1f);
         }
     }
 }

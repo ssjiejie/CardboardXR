@@ -25,8 +25,11 @@ namespace ProjectBootstrap
         public override void BuildScene(string folder)
         {
             // Double-sided in case the sphere is ever seen from outside, and white so the video's own
-            // colors show.
-            var material = StereoBuilder.CreateMaterial("Video Sphere", DemoAssets.Unlit, Color.white, null, 1f, folder);
+            // colors show. The chroma key shader draws as an ordinary unlit surface at strength 0 and
+            // cuts the green out above it, revealing what's behind.
+            var chromaShader = AssetDatabase.LoadAssetAtPath<Shader>("Assets/_Project/Shaders/VideoChromaKey.shader");
+            var material = StereoBuilder.CreateMaterial("Video Sphere", chromaShader != null ? chromaShader : DemoAssets.Unlit,
+                Color.white, null, 1f, folder);
 
             var sphere = new GameObject("Video Sphere").AddComponent<VideoSphere>();
             var serializedSphere = new SerializedObject(sphere);

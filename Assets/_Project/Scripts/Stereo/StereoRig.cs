@@ -89,6 +89,23 @@ namespace CardboardXR.Stereo
             }
         }
 
+        // How wide and tall each eye sees at one meter, in meters: the lens frustum's size. Passthrough
+        // uses it to stretch the camera image over the whole eye, cropping what falls outside.
+        public Vector2 EyeFrustumSizeAtUnitDistance()
+        {
+            if (m_Lens == null)
+                return Vector2.zero;
+            var halfWidth = 0f;
+            var halfHeight = 0f;
+            for (var i = 0; i < 2; i++)
+            {
+                var fov = m_Lens.GetFieldOfView((Eye)i);
+                halfWidth = Mathf.Max(halfWidth, Mathf.Max(Mathf.Tan(fov.x), Mathf.Tan(fov.y)));
+                halfHeight = Mathf.Max(halfHeight, Mathf.Max(Mathf.Tan(fov.z), Mathf.Tan(fov.w)));
+            }
+            return new Vector2(2f * halfWidth, 2f * halfHeight);
+        }
+
         void OnEnable()
         {
             var frameRate = LaunchOptions.GetInt("fps", m_TargetFrameRate);
